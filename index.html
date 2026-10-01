@@ -1,0 +1,355 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Carreira em Jogo</title>
+  <meta name="description" content="Jogo de tabuleiro sobre carreira e mercado de trabalho — SENAI Videira">
+  <meta name="theme-color" content="#0A78F0">
+  <link rel="icon" href="img/logo.png">
+  <link rel="stylesheet" href="estilo.css">
+  <script>
+    // Guarda a linha de um erro de digitação em perguntas.js, para avisar o mediador na tela inicial
+    addEventListener('error', e => {
+      if ((e.filename || e.target?.src || '').includes('perguntas.js')) window.ERRO_PERGUNTAS = e.lineno ? `na linha ${e.lineno}` : '';
+    }, true);
+  </script>
+</head>
+<body>
+
+<!-- Desenhos reutilizáveis: peão, chapéus de profissão e ícones das casas -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <defs>
+    <g id="peao" stroke="#111" stroke-width="3.5" stroke-linejoin="round" stroke-linecap="round">
+      <ellipse cx="50" cy="132" rx="40" ry="10" style="fill:var(--cor)"/>
+      <ellipse cx="50" cy="134" rx="38" ry="7" fill="#000" fill-opacity=".22" stroke="none"/>
+      <path d="M29 94h20v36H29zM51 94h20v36H51z" style="fill:var(--cor)"/>
+      <rect x="27" y="86" width="46" height="12" rx="3" style="fill:var(--cor)"/>
+      <path d="M69 56q13 2 14 15l1 17q-6 5-12 0l-2-16z" style="fill:var(--cor)"/>
+      <path d="M31 52h38l5 38H26z" style="fill:var(--cor)"/>
+      <path d="M40 54h20l-10 12z" fill="#fff" fill-opacity=".35" stroke="none"/>
+      <path d="M31 56q-13 2-15 14l-2 13q6 5 12 0l3-12z" style="fill:var(--cor)"/>
+      <path d="M3 80q-8 0-8 6.5T3 93" fill="none"/>
+      <rect x="3" y="76" width="17" height="19" rx="3" fill="#fff"/>
+      <path d="M6 81h11" stroke="#F09018" stroke-width="3"/>
+      <rect x="43" y="45" width="14" height="9" fill="#FFF3D6"/>
+      <rect x="32" y="14" width="36" height="34" rx="10" fill="#FFF3D6"/>
+      <rect x="40" y="7" width="20" height="9" rx="3" fill="#FFF3D6"/>
+      <circle cx="43" cy="29" r="3.2" fill="#111" stroke="none"/>
+      <circle cx="57" cy="29" r="3.2" fill="#111" stroke="none"/>
+      <path d="M42 36q8 7 16 0" fill="none" stroke-width="3"/>
+    </g>
+    <g id="ch-cartola" stroke="#111" stroke-width="3.5" stroke-linejoin="round">
+      <rect x="35" y="-22" width="30" height="34" rx="3" fill="#1b1b1b"/>
+      <rect x="35" y="1" width="30" height="7" fill="#8a8f98"/>
+      <ellipse cx="50" cy="12" rx="25" ry="5.5" fill="#1b1b1b"/>
+    </g>
+    <g id="ch-capacete" stroke="#111" stroke-width="3.5" stroke-linejoin="round">
+      <path d="M31 17q0-26 19-26t19 26z" fill="#FFE11A"/>
+      <path d="M50-9v26" stroke-width="3"/>
+      <rect x="24" y="13" width="52" height="8" rx="4" fill="#FFE11A"/>
+    </g>
+    <g id="ch-chef" stroke="#111" stroke-width="3.5" stroke-linejoin="round">
+      <path d="M34 15V3q-13-3-8-16 6-10 16-4 7-12 17-2 12-6 16 6 4 12-9 16v12z" fill="#fff"/>
+      <path d="M34 7h32" stroke-width="2.5"/>
+    </g>
+    <g id="ch-headset" stroke="#111" stroke-linejoin="round" stroke-linecap="round">
+      <path d="M29 30q0-31 21-31t21 31" fill="none" stroke-width="6"/>
+      <rect x="23" y="22" width="11" height="18" rx="4" fill="#333" stroke-width="3"/>
+      <rect x="66" y="22" width="11" height="18" rx="4" fill="#333" stroke-width="3"/>
+      <path d="M29 39q3 11 14 9" fill="none" stroke-width="3"/>
+      <circle cx="45" cy="47" r="3.5" fill="#F01020" stroke-width="2"/>
+    </g>
+    <g id="ch-oculos" stroke="#111" stroke-linejoin="round">
+      <path d="M30 28h-4M70 28h4" stroke-width="5" stroke-linecap="round"/>
+      <rect x="30" y="20" width="40" height="15" rx="7" fill="#8FE3FF" stroke-width="3.5"/>
+      <path d="M50 21v13" stroke-width="2.5"/>
+      <path d="M35 24h6" stroke="#fff" stroke-width="2.5" stroke-linecap="round"/>
+    </g>
+    <g id="ch-bone" stroke="#111" stroke-width="3.5" stroke-linejoin="round">
+      <path d="M48 15h33q4 0 2 5H48z" fill="#1E4FD8"/>
+      <path d="M31 17q0-24 19-24t19 24z" fill="#1E4FD8"/>
+      <circle cx="50" cy="-7" r="3" fill="#1E4FD8" stroke-width="2.5"/>
+    </g>
+    <g id="ch-capelo" stroke="#111" stroke-width="3" stroke-linejoin="round">
+      <path d="M36 6v10h28V6" fill="#1b1b1b"/>
+      <path d="M16 3L50-9l34 12-34 12z" fill="#1b1b1b"/>
+      <path d="M50 3l22 5v13" fill="none" stroke="#FCE400" stroke-width="3" stroke-linecap="round"/>
+      <circle cx="72" cy="22" r="3.5" fill="#FCE400" stroke="none"/>
+    </g>
+    <g id="ch-nenhum"></g>
+    <g id="coroa" stroke="#111" stroke-width="3.5" stroke-linejoin="round">
+      <path d="M28 -2l6-24 10 14 6-18 6 18 10-14 6 24z" fill="#FFD21A"/>
+      <circle cx="50" cy="-9" r="3" fill="#F01020" stroke-width="2"/>
+    </g>
+
+    <g id="ic-maleta" stroke="#111" stroke-linejoin="round">
+      <path d="M-8-11v-6h16v6" fill="none" stroke-width="4"/>
+      <rect x="-20" y="-12" width="40" height="28" rx="5" fill="#F09018" stroke-width="3.5"/>
+      <path d="M-20 0h40" stroke-width="3"/>
+      <rect x="-4" y="-3" width="8" height="7" rx="1.5" fill="#FCE400" stroke-width="2"/>
+    </g>
+    <g id="ic-prancheta" stroke="#111" stroke-linejoin="round" stroke-linecap="round">
+      <rect x="-16" y="-17" width="32" height="38" rx="5" fill="#fff" stroke-width="3.5"/>
+      <rect x="-9" y="-23" width="18" height="10" rx="3" fill="#F09018" stroke-width="3"/>
+      <path d="M-8-3h16M-8 5h16M-8 13h9" stroke-width="3.2"/>
+    </g>
+    <g id="ic-caveira" stroke="#111" stroke-linejoin="round">
+      <path d="M-15 4q-5-25 15-25t15 25q-2 6-6 6v8h-18v-8q-4 0-6-6z" fill="#fff" stroke-width="3"/>
+      <circle cx="-6.5" cy="-2" r="5" fill="#111" stroke="none"/>
+      <circle cx="6.5" cy="-2" r="5" fill="#111" stroke="none"/>
+      <path d="M0 4l-3 5h6z" fill="#111" stroke="none"/>
+      <path d="M-5 12v6M0 12v6M5 12v6" stroke-width="2"/>
+    </g>
+    <g id="ic-capelo" stroke-linejoin="round">
+      <path d="M-13-1v10q13 8 26 0V-1" fill="#111"/>
+      <path d="M-25-6L0-16l25 10L0 4z" fill="#111"/>
+      <path d="M0-6l16 3v13" fill="none" stroke="#F09018" stroke-width="3" stroke-linecap="round"/>
+      <circle cx="16" cy="12" r="3.5" fill="#F09018"/>
+    </g>
+
+    <pattern id="xadrez" width="20" height="20" patternUnits="userSpaceOnUse">
+      <rect width="20" height="20" fill="#fff"/>
+      <rect width="10" height="10" fill="#111"/><rect x="10" y="10" width="10" height="10" fill="#111"/>
+    </pattern>
+    <radialGradient id="madeira" cx="45%" cy="40%" r="70%">
+      <stop offset="0" stop-color="#E2B97F"/><stop offset=".7" stop-color="#C89A5E"/><stop offset="1" stop-color="#A97A43"/>
+    </radialGradient>
+    <clipPath id="clip-chaveiro" clipPathUnits="objectBoundingBox"><circle cx=".516" cy=".519" r=".415"/></clipPath>
+    <path id="arco-topo" d="M36 150A74 74 0 0 1 184 150"/>
+    <path id="arco-base" d="M24 150A86 86 0 0 0 196 150"/>
+  </defs>
+</svg>
+
+<main id="app">
+
+  <!-- TELA INICIAL -->
+  <section id="tela-inicio" class="tela tela-inicio">
+    <div class="inicio-logo">
+      <div class="engrenagem-logo"><img src="img/logo.png" alt="Carreira em Jogo"></div>
+    </div>
+    <p class="inicio-sub">Da entrada no mercado de trabalho à liderança: role o dado, responda e construa sua carreira!</p>
+    <div class="desfile" id="desfile" aria-hidden="true"></div>
+    <div class="inicio-botoes">
+      <button class="btn btn-gigante" id="btn-jogar">Jogar</button>
+      <button class="btn btn-branco" id="btn-continuar" hidden>Continuar partida</button>
+      <button class="btn btn-branco" data-abrir="dlg-regras">Como jogar</button>
+      <button class="btn btn-branco" id="btn-ver-quadro">🪪 Quadro de funcionários</button>
+    </div>
+    <p class="erro-conteudo" id="erro-conteudo" role="alert" hidden></p>
+    <p class="creditos">Projeto da turma de Aprendizagem Industrial em Assistente Administrativo · SENAI Videira/SC · Mundo SENAI 2026</p>
+  </section>
+
+  <!-- LOBBY -->
+  <section id="tela-lobby" class="tela tela-lobby" hidden>
+    <h1 class="titulo-bolha">Quem vai jogar?</h1>
+    <p class="lobby-dica">Até 4 jogadores ou equipes. Escolha um nome e o chapéu da sua profissão!</p>
+    <div class="vagas" id="vagas"></div>
+    <div class="ajustes">
+      <div class="campo">
+        <label for="cfg-tempo">⏱ Tempo para responder</label>
+        <div class="campo-num">
+          <button type="button" data-passo="-5" data-alvo="cfg-tempo" aria-label="Menos 5 segundos para responder">−</button>
+          <input id="cfg-tempo" type="number" min="0" max="600" step="1" inputmode="numeric">
+          <button type="button" data-passo="5" data-alvo="cfg-tempo" aria-label="Mais 5 segundos para responder">+</button>
+          <span>seg.</span>
+        </div>
+        <div class="atalhos" data-alvo="cfg-tempo"><button type="button" data-valor="0">Sem limite</button><button type="button" data-valor="30">30 s</button><button type="button" data-valor="45">45 s</button><button type="button" data-valor="60">60 s</button></div>
+      </div>
+      <div class="campo">
+        <label for="cfg-desafio">🎤 Tempo do desafio prático</label>
+        <div class="campo-num">
+          <button type="button" data-passo="-5" data-alvo="cfg-desafio" aria-label="Menos 5 segundos para o desafio">−</button>
+          <input id="cfg-desafio" type="number" min="0" max="600" step="1" inputmode="numeric">
+          <button type="button" data-passo="5" data-alvo="cfg-desafio" aria-label="Mais 5 segundos para o desafio">+</button>
+          <span>seg.</span>
+        </div>
+        <div class="atalhos" data-alvo="cfg-desafio"><button type="button" data-valor="0">Sem limite</button><button type="button" data-valor="30">30 s</button><button type="button" data-valor="45">45 s</button><button type="button" data-valor="60">60 s</button></div>
+      </div>
+      <div class="campo">
+        <label for="cfg-duracao">⌛ Tempo total da partida</label>
+        <div class="campo-num">
+          <button type="button" data-passo="-1" data-alvo="cfg-duracao" aria-label="Menos 1 minuto de partida">−</button>
+          <input id="cfg-duracao" type="number" min="0" max="240" step="1" inputmode="numeric">
+          <button type="button" data-passo="1" data-alvo="cfg-duracao" aria-label="Mais 1 minuto de partida">+</button>
+          <span>min.</span>
+        </div>
+        <div class="atalhos" data-alvo="cfg-duracao"><button type="button" data-valor="0">Livre</button><button type="button" data-valor="10">10 min</button><button type="button" data-valor="15">15 min</button><button type="button" data-valor="20">20 min</button></div>
+      </div>
+      <label class="interruptor">
+        <input type="checkbox" id="cfg-mediador">
+        <span class="chave" aria-hidden="true"></span>
+        <span><b>Com mediador</b><small>avalia os desafios e pode usar o dado de espuma</small></span>
+      </label>
+    </div>
+    <div class="lobby-botoes">
+      <button class="btn btn-branco" id="btn-voltar">Voltar</button>
+      <button class="btn btn-gigante" id="btn-comecar">Começar ▶</button>
+    </div>
+  </section>
+
+  <!-- PARTIDA -->
+  <section id="tela-jogo" class="tela tela-jogo" hidden>
+    <div class="tabuleiro-area">
+      <svg id="tabuleiro" class="tabuleiro" viewBox="0 0 1000 1000" role="img" aria-label="Tabuleiro do Carreira em Jogo"></svg>
+      <div id="aviso" class="aviso" role="status" hidden></div>
+    </div>
+    <aside class="painel">
+      <div class="painel-topo">
+        <button class="btn-icone" id="btn-menu" aria-label="Menu">☰</button>
+        <span class="painel-marca">Carreira em Jogo</span>
+        <span class="relogio" id="relogio" hidden>⏱ <b>--:--</b></span>
+        <button class="btn-encerrar" data-encerrar>⏹ Encerrar</button>
+      </div>
+      <div class="vez" id="vez"></div>
+      <div class="dado-area">
+        <button class="dado" id="dado" aria-label="Rolar o dado" disabled>
+          <span class="cubo" id="cubo"></span>
+        </button>
+        <p class="dado-dica" id="dado-dica">Toque no dado!</p>
+        <div class="dado-numeros" id="dado-numeros" role="group" aria-label="Número do dado de espuma" hidden>
+          <span>Dado de espuma:</span>
+          <button data-n="1">1</button><button data-n="2">2</button><button data-n="3">3</button>
+          <button data-n="4">4</button><button data-n="5">5</button><button data-n="6">6</button>
+        </div>
+      </div>
+      <ol class="placar" id="placar" aria-label="Jogadores"></ol>
+      <button class="btn btn-branco btn-pequeno" data-abrir="dlg-regras">Legenda das casas</button>
+    </aside>
+  </section>
+
+  <!-- FIM -->
+  <section id="tela-fim" class="tela tela-fim" hidden>
+    <h1 class="titulo-fim" id="fim-titulo"></h1>
+    <p class="fim-sub" id="fim-sub"></p>
+    <ol class="podio" id="podio"></ol>
+    <div class="fim-botoes">
+      <button class="btn btn-gigante" id="btn-selfies">📸 Selfie e quadro</button>
+      <button class="btn btn-branco" id="btn-revanche">Jogar de novo</button>
+      <button class="btn btn-branco" id="btn-novo">Novos jogadores</button>
+      <button class="btn btn-branco" id="btn-inicio">Início</button>
+    </div>
+  </section>
+
+  <!-- QUADRO DE FUNCIONÁRIOS -->
+  <section id="tela-quadro" class="tela tela-quadro" hidden>
+    <header class="quadro-topo">
+      <div class="quadro-logo"><img src="img/logo.png" alt="Carreira em Jogo"></div>
+      <div>
+        <h1 class="titulo-bolha">Quadro de Funcionários</h1>
+        <p class="quadro-sub" id="quadro-sub"></p>
+      </div>
+    </header>
+    <ul class="quadro-resumo" id="quadro-resumo" aria-label="Funcionários por cargo"></ul>
+    <ul class="quadro" id="quadro" aria-label="Funcionários"></ul>
+    <p class="quadro-vazio" id="quadro-vazio" hidden>Ninguém foi contratado ainda. Jogue uma partida e tire a selfie com o seu cargo!</p>
+    <div class="quadro-botoes">
+      <button class="btn btn-gigante" id="btn-quadro-jogar">Jogar ▶</button>
+      <button class="btn btn-branco" id="btn-quadro-inicio">Início</button>
+      <button class="btn btn-branco btn-pequeno" id="btn-quadro-limpar">Apagar o quadro</button>
+    </div>
+    <p class="quadro-privacidade">🔒 As fotos ficam guardadas só neste computador e podem ser apagadas a qualquer momento (toque no ✕ do crachá).</p>
+  </section>
+</main>
+
+<!-- Faixa de anúncio (estilo "reunião de emergência"); um toque pula -->
+<div id="splash" class="splash" hidden aria-hidden="true">
+  <div class="splash-faixa">
+    <div class="splash-icone" id="splash-icone"></div>
+    <div class="splash-textos">
+      <div class="splash-pre" id="splash-pre"></div>
+      <div class="splash-titulo" id="splash-titulo"></div>
+      <div class="splash-sub" id="splash-sub"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Carta (pergunta, desafio, evento) -->
+<dialog id="dlg-carta" class="dlg-carta" aria-labelledby="carta-tema">
+  <button class="btn-encerrar btn-encerrar-carta" data-encerrar>⏹ Encerrar partida</button>
+  <div class="carta" id="carta">
+    <div class="carta-verso" aria-hidden="true"></div>
+    <div class="carta-frente">
+      <header class="carta-topo">
+        <span class="carta-icone" id="carta-icone" aria-hidden="true"></span>
+        <span class="carta-tema" id="carta-tema"></span>
+        <span class="carta-tipo" id="carta-tipo"></span>
+      </header>
+      <div class="tempo-barra" id="tempo-barra" hidden><i></i><b id="tempo-num"></b></div>
+      <div class="carta-corpo" id="carta-corpo"></div>
+    </div>
+  </div>
+</dialog>
+
+<!-- Menu de pausa -->
+<dialog id="dlg-menu" class="dlg-painel" aria-labelledby="menu-titulo">
+  <h2 id="menu-titulo" class="titulo-bolha pequeno">Pausa</h2>
+  <div class="menu-botoes">
+    <button class="btn" data-fechar>Continuar</button>
+    <button class="btn btn-branco" data-abrir="dlg-regras">Como jogar</button>
+    <button class="btn btn-branco" id="btn-som">🔊 Som: ligado</button>
+    <button class="btn btn-branco" id="btn-tela-cheia">⛶ Tela cheia</button>
+    <button class="btn btn-vermelho" data-encerrar>⏹ Encerrar partida</button>
+  </div>
+</dialog>
+
+<!-- Confirmação para encerrar -->
+<dialog id="dlg-encerrar" class="dlg-painel" aria-labelledby="encerrar-titulo">
+  <h2 id="encerrar-titulo" class="titulo-bolha pequeno">Encerrar a partida?</h2>
+  <p class="dlg-texto">Cada jogador fica com o cargo que alcançou até agora e pode tirar a selfie para o quadro de funcionários.</p>
+  <div class="menu-botoes">
+    <button class="btn btn-vermelho" id="btn-encerrar-sim">Encerrar agora</button>
+    <button class="btn btn-branco" data-fechar>Voltar ao jogo</button>
+  </div>
+</dialog>
+
+<!-- Selfie para o quadro de funcionários -->
+<dialog id="dlg-selfie" class="dlg-painel dlg-selfie" aria-labelledby="selfie-titulo">
+  <h2 id="selfie-titulo" class="titulo-bolha pequeno">Hora da selfie!</h2>
+  <p class="dlg-texto" id="selfie-dica"></p>
+  <div class="cracha cracha-grande" id="selfie-cracha">
+    <span class="cracha-presilha" aria-hidden="true"></span>
+    <div class="cracha-topo"><img src="img/logo.png" alt=""><span>Carreira em Jogo</span></div>
+    <div class="cracha-foto">
+      <video id="selfie-video" playsinline muted aria-label="Imagem da câmera"></video>
+      <img id="selfie-img" alt="Foto tirada" hidden>
+      <span class="selfie-avatar" id="selfie-avatar" hidden></span>
+      <span class="selfie-contagem" id="selfie-contagem" aria-live="assertive" hidden></span>
+      <span class="selfie-flash" id="selfie-flash"></span>
+    </div>
+    <b class="cracha-nome" id="selfie-nome"></b>
+    <span class="cracha-cargo" id="selfie-cargo"></span>
+  </div>
+  <p class="selfie-erro" id="selfie-erro" role="alert" hidden></p>
+  <input type="file" id="selfie-arquivo" accept="image/*" capture="user" hidden>
+  <div class="selfie-botoes" id="selfie-botoes"></div>
+  <p class="selfie-privacidade">🔒 A foto fica só neste computador, no quadro de funcionários, e pode ser apagada quando quiser.</p>
+</dialog>
+
+<!-- Regras -->
+<dialog id="dlg-regras" class="dlg-painel dlg-regras" aria-labelledby="regras-titulo">
+  <h2 id="regras-titulo" class="titulo-bolha pequeno">Como jogar</h2>
+  <ol class="regras-passos">
+    <li><b>Role o dado</b> e ande. Caiu numa casa colorida? Responda a carta do tema: <b>acertou, avança 2 casas</b>.</li>
+    <li>Na <b>primeira estrela</b> o peão para. Para chegar ao <b>CHEGOU!</b>, acerte o Desafio Estrela. Errou? Tenta de novo na próxima vez.</li>
+    <li>Quando alguém chega, os outros jogam <b>uma última vez</b>. No fim, cada um ganha o <b>cargo</b> que alcançou, tira a selfie e entra no <b>quadro de funcionários</b>!</li>
+  </ol>
+  <ul class="legenda" id="legenda"></ul>
+  <button class="btn" data-fechar>Entendi!</button>
+</dialog>
+
+<!-- Revelação do início da partida (um toque pula) -->
+<div id="revelacao" class="revelacao" hidden>
+  <h2>Sua jornada começa!</h2>
+  <div class="revelacao-peoes"></div>
+  <p>Todos começam como <b>Jovem Aprendiz</b>. Acerte o Desafio Estrela, chegue lá e vire <b>Líder</b>!</p>
+</div>
+
+<div id="anuncio" class="so-leitor" aria-live="polite"></div>
+
+<script src="lib/gsap.min.js"></script>
+<script src="lib/confetti.min.js"></script>
+<script src="perguntas.js"></script>
+<script src="jogo.js"></script>
+</body>
+</html>
