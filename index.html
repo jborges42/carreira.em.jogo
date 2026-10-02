@@ -126,7 +126,7 @@
   <!-- TELA INICIAL -->
   <section id="tela-inicio" class="tela tela-inicio">
     <div class="inicio-logo">
-      <div class="engrenagem-logo"><img src="img/logo.png" alt="Carreira em Jogo"></div>
+      <div class="engrenagem-logo"><img src="img/logo-circulo.png" alt="Carreira em Jogo"></div>
     </div>
     <p class="inicio-sub">Da entrada no mercado de trabalho à liderança: role o dado, responda e construa sua carreira!</p>
     <div class="desfile" id="desfile" aria-hidden="true"></div>
@@ -146,6 +146,12 @@
     <p class="lobby-dica">Até 4 jogadores ou equipes. Escolha um nome e o chapéu da sua profissão!</p>
     <div class="vagas" id="vagas"></div>
     <div class="ajustes">
+      <div class="campo">
+        <b id="rotulo-dificuldade">🎯 Dificuldade das perguntas</b>
+        <input id="cfg-dificuldade" type="hidden">
+        <div class="atalhos" data-alvo="cfg-dificuldade" role="group" aria-labelledby="rotulo-dificuldade" aria-describedby="dificuldade-dica"><button type="button" data-valor="0">Fácil</button><button type="button" data-valor="1">Médio</button><button type="button" data-valor="2">Difícil</button><button type="button" data-valor="3">Expert</button></div>
+        <small id="dificuldade-dica"></small>
+      </div>
       <div class="campo">
         <label for="cfg-tempo">⏱ Tempo para responder</label>
         <div class="campo-num">
@@ -234,7 +240,7 @@
   <!-- QUADRO DE FUNCIONÁRIOS -->
   <section id="tela-quadro" class="tela tela-quadro" hidden>
     <header class="quadro-topo">
-      <div class="quadro-logo"><img src="img/logo.png" alt="Carreira em Jogo"></div>
+      <div class="quadro-logo"><img src="img/logo-circulo.png" alt="Carreira em Jogo"></div>
       <div>
         <h1 class="titulo-bolha">Quadro de Funcionários</h1>
         <p class="quadro-sub" id="quadro-sub"></p>
@@ -309,7 +315,7 @@
   <p class="dlg-texto" id="selfie-dica"></p>
   <div class="cracha cracha-grande" id="selfie-cracha">
     <span class="cracha-presilha" aria-hidden="true"></span>
-    <div class="cracha-topo"><img src="img/logo.png" alt=""><span>Carreira em Jogo</span></div>
+    <div class="cracha-topo"><img src="img/logo-circulo.png" alt=""><span>Carreira em Jogo</span></div>
     <div class="cracha-foto">
       <video id="selfie-video" playsinline muted aria-label="Imagem da câmera"></video>
       <img id="selfie-img" alt="Foto tirada" hidden>
@@ -331,6 +337,8 @@
   <h2 id="regras-titulo" class="titulo-bolha pequeno">Como jogar</h2>
   <ol class="regras-passos">
     <li><b>Role o dado</b> e ande. Caiu numa casa colorida? Responda a carta do tema: <b>acertou, avança 2 casas</b>.</li>
+    <li>Nos <b>marcos de cargo</b> o peão para e faz a <b>avaliação</b>: uma pergunta de um tema que você ainda não domina. Domina um tema quem acerta pelo menos metade das perguntas dele.</li>
+    <li>Cada cargo pede um tema dominado a mais: Júnior 1, Pleno 2, Sênior 3. <b>Líder</b> chega lá dominando os 4. Errar não tira casas nem cargo: o próximo acerto conta!</li>
     <li>Na <b>primeira estrela</b> o peão para. Para chegar ao <b>CHEGOU!</b>, acerte o Desafio Estrela. Errou? Tenta de novo na próxima vez.</li>
     <li>Quando alguém chega, os outros jogam <b>uma última vez</b>. No fim, cada um ganha o <b>cargo</b> que alcançou, tira a selfie e entra no <b>quadro de funcionários</b>!</li>
   </ol>
@@ -342,7 +350,7 @@
 <div id="revelacao" class="revelacao" hidden>
   <h2>Sua jornada começa!</h2>
   <div class="revelacao-peoes"></div>
-  <p>Todos começam como <b>Jovem Aprendiz</b>. Acerte o Desafio Estrela, chegue lá e vire <b>Líder</b>!</p>
+  <p>Todos começam como <b>Jovem Aprendiz</b>. Mostre o que sabe nas avaliações, domine os 4 temas e vire <b>Líder</b>!</p>
 </div>
 
 <div id="anuncio" class="so-leitor" aria-live="polite"></div>
