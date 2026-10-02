@@ -19,7 +19,16 @@ const TEMAS = {
 };
 const TEMA_DA_LETRA = { E: 'etica', R: 'rotinas', T: 'tempo', F: 'financas' };
 
-// Cargos da carreira (viram o chaveiro e o crachá no fim). "desde" = primeira casa do cargo. Líder: só quem chega.
+// Dificuldade das perguntas, escolhida no lobby; cada uma é um baralho próprio em perguntas.js
+const DIFICULDADES = [
+  { id: 'facil',   nome: 'Fácil',   dica: 'Situações do dia a dia, para quem está começando' },
+  { id: 'medio',   nome: 'Médio',   dica: 'O básico do mundo do trabalho, para jovens aprendizes' },
+  { id: 'dificil', nome: 'Difícil', dica: 'Termos técnicos, leis e contas, para curso técnico' },
+  { id: 'expert',  nome: 'Expert',  dica: 'Casos e cálculos de várias etapas, para profissionais' },
+];
+
+// Cargos da carreira (viram o chaveiro e o crachá no fim). "desde" = casa do marco de avaliação do cargo.
+// Cada cargo pede um tema dominado a mais (Júnior 1 … Líder os 4): ver cargoPossivel.
 const NIVEIS = [
   { nome: 'Jovem Aprendiz',      curto: 'Aprendiz', desde: 0,   cor: '#00C0F0' },
   { nome: 'Profissional Júnior', curto: 'Júnior',   desde: 12,  cor: '#22B14C' },
@@ -28,6 +37,7 @@ const NIVEIS = [
   { nome: 'Líder',               curto: 'Líder',    desde: FIM, cor: '#FFC21A' },
 ];
 const LIDER = NIVEIS.length - 1;
+const MARCOS = NIVEIS.slice(1, LIDER).map(n => n.desde); // o peão para em cada um para a avaliação
 
 const CORES = [
   { nome: 'Verde', cor: '#2DBE4E' }, { nome: 'Vermelho', cor: '#EE3333' },
@@ -47,7 +57,7 @@ const CHAPEUS = [
 ];
 
 const BONUS_ACERTO = 2; // casas por pergunta certa ou desafio aprovado
-const CONFIG_PADRAO = { tempo: 45, desafio: 45, duracao: 0, mediador: false };
+const CONFIG_PADRAO = { tempo: 45, desafio: 45, duracao: 0, mediador: false, dificuldade: 1 }; // dificuldade = índice em DIFICULDADES
 
 // Caminho do tabuleiro (quadro de 1000 × 1000), suavizado por curva
 const ROTA = [
@@ -78,7 +88,6 @@ const aguardar = promessa => { const id = partidaId; return promessa.then(v => (
 const sortear = lista => lista[Math.floor(Math.random() * lista.length)];
 const embaralhar = lista => { const a = [...lista]; for (let i = a.length - 1; i > 0; i--) { const k = Math.floor(Math.random() * (i + 1)); [a[i], a[k]] = [a[k], a[i]]; } return a; };
 const esc = t => String(t).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
-const nivelDe = casa => NIVEIS.reduce((n, v, i) => (casa >= v.desde ? i : n), 0);
 const loop = (alvo, props) => (RM ? null : gsap.to(alvo, { repeat: -1, yoyo: true, ease: 'sine.inOut', ...props }));
 const listaNomes = nomes => (nomes.length < 2 ? nomes.join('') : nomes.slice(0, -1).join(', ') + ' e ' + nomes[nomes.length - 1]);
 
@@ -109,14 +118,24 @@ function confeteDe(el, opcoes) {
 const VOLUME = { 'dado-agita': .55, 'dado-cai': .8, passo1: .45, passo2: .45, passo3: .45, carta: .7, virar: .6, clique: .5,
   voto: .6, tique: .45, vez: .45, tempo: .6, certo: .7, errado: .6, promocao: .6, vitoria: .8, cilada: .6, qualificacao: .6,
   pergunta: .5, estrela: .6 };
+// Cada som é decodificado uma vez e tocado pelo Web Audio. Antes, um <audio> novo por som (~400 por partida)
+// enchia a memória e engasgava a câmera da selfie. Aberto direto do arquivo (file://), o fetch falha: aí cada som
+// usa um único <audio>, sem cópias.
 const SONS = {};
 let somLigado = lerPref('som', true);
-Object.keys(VOLUME).forEach(n => (SONS[n] = Object.assign(new Audio(`som/${n}.wav`), { preload: 'auto' })));
+const audio = window.AudioContext ? new AudioContext() : null;
+Object.keys(VOLUME).forEach(n => fetch(`som/${n}.wav`).then(r => r.arrayBuffer()).then(b => audio.decodeAudioData(b))
+  .then(buffer => (SONS[n] = buffer), () => (SONS[n] = new Audio(`som/${n}.wav`))));
 function som(nome) {
-  if (!somLigado || !SONS[nome]) return;
-  const a = SONS[nome].cloneNode();
-  a.volume = VOLUME[nome];
-  a.play().catch(() => {});
+  const s = SONS[nome];
+  if (!somLigado || !s) return;
+  if (s instanceof Audio) { s.currentTime = 0; s.volume = VOLUME[nome]; s.play().catch(() => {}); return; }
+  if (audio.state === 'suspended') audio.resume();
+  const fonte = audio.createBufferSource(), volume = audio.createGain();
+  fonte.buffer = s;
+  volume.gain.value = VOLUME[nome];
+  fonte.connect(volume).connect(audio.destination);
+  fonte.start();
 }
 
 // ============================== CONTEÚDO ==============================
@@ -128,15 +147,18 @@ const problemasConteudo = [];
 function carregarConteudo() {
   if (typeof CARTAS === 'undefined') {
     problemasConteudo.push(`O arquivo perguntas.js tem um erro de digitação${window.ERRO_PERGUNTAS ? ' ' + window.ERRO_PERGUNTAS : ''} (vírgula, aspas ou colchete). Abra o arquivo e confira; o Console do navegador (F12) mostra detalhes.`);
-    Object.keys(TEMAS).forEach(t => (BARALHOS[t] = []));
+    Object.keys(TEMAS).forEach(t => (BARALHOS[t] = DIFICULDADES.map(() => [])));
   } else for (const [tema, t] of Object.entries(TEMAS)) {
-    BARALHOS[tema] = (CARTAS[tema] || []).filter((c, i) => {
-      const ok = c && (c.desafio ? typeof c.desafio === 'string'
-        : typeof c.pergunta === 'string' && typeof c.certa === 'string' && Array.isArray(c.erradas) && c.erradas.length > 0 && !c.erradas.includes(c.certa));
-      if (!ok) problemasConteudo.push(`${t.nome}: carta ${i + 1} incompleta (foi ignorada).`);
-      return ok;
+    BARALHOS[tema] = DIFICULDADES.map(d => {
+      const cartas = (CARTAS[tema]?.[d.id] || []).filter((c, i) => {
+        const ok = c && (c.desafio ? typeof c.desafio === 'string'
+          : typeof c.pergunta === 'string' && typeof c.certa === 'string' && Array.isArray(c.erradas) && c.erradas.length > 0 && c.erradas.length < 4 && !c.erradas.includes(c.certa));
+        if (!ok) problemasConteudo.push(`${t.nome} (${d.nome}): carta ${i + 1} incompleta (foi ignorada).`);
+        return ok;
+      });
+      if (!cartas.some(c => !c.desafio)) problemasConteudo.push(`${t.nome}: nenhuma pergunta válida no nível ${d.nome}.`);
+      return cartas;
     });
-    if (!BARALHOS[tema].some(c => !c.desafio)) problemasConteudo.push(`${t.nome}: nenhuma pergunta válida.`);
   }
   const evOk = e => e && typeof e.texto === 'string' && e.casas > 0;
   EVENTOS.qualificacao = (typeof QUALIFICACAO !== 'undefined' ? QUALIFICACAO : []).filter(evOk);
@@ -150,17 +172,19 @@ const RESERVA = { pergunta: 'O que mais ajuda a construir uma boa carreira?', ce
   erradas: ['Esperar a sorte aparecer', 'Fazer só o mínimo combinado'], explicacao: 'Aprender sempre e ser ético abre portas em qualquer profissão.' };
 
 // Compra a carta do topo da pilha (embaralhada e lembrada entre partidas); com soPergunta, pula desafios práticos.
+// Usa só o baralho da dificuldade escolhida, com uma pilha por tema e dificuldade.
 function comprar(tema, soPergunta) {
-  if (!BARALHOS[tema]?.some(c => !c.desafio)) tema = Object.keys(TEMAS).find(t => BARALHOS[t]?.some(c => !c.desafio)) || tema;
-  const cartas = BARALHOS[tema] || [];
+  const n = estado.config.dificuldade, temPergunta = t => BARALHOS[t]?.[n]?.some(c => !c.desafio);
+  if (!temPergunta(tema)) tema = Object.keys(TEMAS).find(temPergunta) || tema;
+  const cartas = BARALHOS[tema]?.[n] || [], chave = tema + n;
   if (!cartas.length) return { tema, carta: RESERVA };
   const serve = i => !soPergunta || !cartas[i].desafio;
-  let pilha = (estado.pilhas[tema] || []).filter(i => i < cartas.length);
+  let pilha = (estado.pilhas[chave] || []).filter(i => i < cartas.length);
   let k = pilha.findLastIndex(serve);
   if (k < 0) { pilha = embaralhar(cartas.map((_, i) => i)); k = pilha.findLastIndex(serve); }
   if (k < 0) return { tema, carta: RESERVA };
   const [i] = pilha.splice(k, 1);
-  estado.pilhas[tema] = pilha;
+  estado.pilhas[chave] = pilha;
   return { tema, carta: cartas[i] };
 }
 function comprarEvento(tipo) {
@@ -362,7 +386,7 @@ function montarTabuleiro() {
     <g id="eng-centro"><path d="${engrenagemD(CENTRO.x, CENTRO.y, CENTRO.r, 22, 20)}" fill="#9090A0" stroke="#111" stroke-width="5" stroke-linejoin="round"/>
       <circle cx="${CENTRO.x}" cy="${CENTRO.y}" r="${CENTRO.r - 24}" fill="#7d7d8c" stroke="#111" stroke-width="4"/></g>
     <circle cx="${CENTRO.x}" cy="${CENTRO.y}" r="${CENTRO.r - 30}" fill="#fff" stroke="#111" stroke-width="5"/>
-    <image href="img/logo.png" x="${CENTRO.x - CENTRO.r + 32}" y="${CENTRO.y - CENTRO.r + 32}" width="${2 * (CENTRO.r - 32)}" height="${2 * (CENTRO.r - 32)}" clip-path="url(#clip-logo)"/>
+    <image href="img/logo-circulo.png" x="${CENTRO.x - CENTRO.r + 32}" y="${CENTRO.y - CENTRO.r + 32}" width="${2 * (CENTRO.r - 32)}" height="${2 * (CENTRO.r - 32)}" clip-path="url(#clip-logo)"/>
     <path d="${d}" class="estrada-sombra" stroke-width="${W + 16}"/>
     <path d="${d}" class="estrada-borda" stroke-width="${W + 12}"/>
     <g class="casas">${casas}</g>
@@ -378,7 +402,8 @@ function montarTabuleiro() {
 
   loop('#eng-centro', { rotation: 360, svgOrigin: `${CENTRO.x} ${CENTRO.y}`, duration: 40, ease: 'none', yoyo: false });
   document.querySelectorAll('.eng-deco').forEach((g, i) => loop(g, { rotation: i % 2 ? -360 : 360, svgOrigin: `${g.dataset.x} ${g.dataset.y}`, duration: 18 + i * 4, ease: 'none', yoyo: false }));
-  loop('.estrela-casa', { scale: 1.08, transformOrigin: '50% 50%', duration: .9, stagger: .3 });
+  // um loop por estrela: o loop único com stagger escapava do killTweensOf e prendia o tabuleiro antigo na memória
+  document.querySelectorAll('.estrela-casa').forEach((s, k) => loop(s, { scale: 1.08, transformOrigin: '50% 50%', duration: .9, delay: k * .3 }));
 }
 
 function aplicarCamera() {
@@ -453,10 +478,16 @@ let telaAtual = 'inicio';
 let aoRolar = null, aoEscolher = null, aoContinuar = null;
 let relogio = null, splashTl = null, ranking = [];
 
+const TELAS = ['inicio', 'lobby', 'jogo', 'fim', 'quadro'];
 function mostrarTela(nome) {
   telaAtual = nome;
-  for (const t of ['inicio', 'lobby', 'jogo', 'fim', 'quadro']) $(`#tela-${t}`).hidden = t !== nome;
+  for (const t of TELAS) $(`#tela-${t}`).hidden = t !== nome;
+  animarSo(nome);
   gsap.fromTo(`#tela-${nome}`, { opacity: 0 }, { opacity: 1, duration: .35 });
+}
+// Só a tela à vista anima (null pausa todas): os loops infinitos das telas escondidas gastavam CPU à toa
+function animarSo(nome) {
+  for (const t of TELAS) gsap.getTweensOf(`#tela-${t} *`).forEach(tw => tw.paused(t !== nome));
 }
 
 function salvar() { try { localStorage.setItem('cej:partida', JSON.stringify(estado)); } catch { /* sem armazenamento */ } }
@@ -464,18 +495,41 @@ function limparSave() { try { localStorage.removeItem('cej:partida'); } catch { 
 function lerSave() {
   try {
     const s = JSON.parse(localStorage.getItem('cej:partida'));
-    return s?.mapa === MAPA && s.jogadores?.length && s.jogadores.every(j => j.casa >= 0 && j.casa <= FIM) ? s : null;
+    return s?.mapa === MAPA && s.jogadores?.length && s.jogadores.every(j => j.casa >= 0 && j.casa <= FIM && j.porTema) ? s : null;
   } catch { return null; }
 }
 
+// nivelMax = cargo atual (nunca cai) · marco = avaliações feitas (vira LIDER na chegada) · porTema = acertos e erros de cada tema
 function novaPartida(jogadores, config) {
   const pilhas = lerPref('pilhas', {});
   estado = {
     mapa: MAPA, vez: 0, config: { ...CONFIG_PADRAO, ...config }, ultimaRodada: false,
     pilhas: pilhas && typeof pilhas === 'object' ? pilhas : {},
     restanteMs: config.duracao ? config.duracao * 60000 : null,
-    jogadores: jogadores.map(j => ({ ...j, casa: 0, nivelMax: 0, acertos: 0, perguntas: 0 })),
+    jogadores: jogadores.map(j => ({ ...j, casa: 0, nivelMax: 0, marco: 0, acertos: 0, perguntas: 0,
+      porTema: Object.fromEntries(Object.keys(TEMAS).map(t => [t, { certas: 0, erradas: 0 }])) })),
   };
+}
+
+// ============================== QUALIFICAÇÃO ==============================
+// Domina um tema quem acertou pelo menos metade das perguntas dele (e ao menos uma). Errar não tira nada:
+// o próximo acerto conta. O cargo sobe até o último marco avaliado, um tema dominado por cargo (Líder: os 4).
+
+const domina = (j, t) => j.porTema[t].certas > 0 && j.porTema[t].certas >= j.porTema[t].erradas;
+const naoDominados = j => Object.keys(TEMAS).filter(t => !domina(j, t));
+const cargoPossivel = j => Math.min(j.marco, Object.keys(TEMAS).length - naoDominados(j).length);
+const marcoPendente = j => j.casa >= (MARCOS[j.marco] ?? Infinity);
+const temaParaAvaliar = j => sortear(naoDominados(j).length ? naoDominados(j) : Object.keys(TEMAS));
+
+function selosHTML(j) {
+  const nomes = Object.keys(TEMAS).filter(t => domina(j, t)).map(t => TEMAS[t].nome);
+  return `<span class="selos" role="img" aria-label="Domina: ${esc(nomes.length ? listaNomes(nomes) : 'nenhum tema ainda')}">${Object.entries(TEMAS)
+    .map(([k, t]) => `<i class="${domina(j, k) ? 'ok' : ''}" style="--tema:${t.cor}" title="${esc(t.nome)}"></i>`).join('')}</span>`;
+}
+
+function verificarPromocao(i) {
+  const j = estado.jogadores[i], n = cargoPossivel(j);
+  if (n > j.nivelMax && n < LIDER) promocao(i, n); // Líder é festejado na chegada
 }
 
 // ============================== PAINEL ==============================
@@ -484,13 +538,14 @@ function desenharPainel() {
   const j = estado.jogadores[estado.vez];
   $('#vez').style.setProperty('--cor', j.cor);
   $('#vez').innerHTML = `<span class="vez-peao">${peaoSVG(j)}</span>
-    <span class="vez-info"><small>${estado.ultimaRodada ? 'Última chance de' : 'Vez de'}</small><b>${esc(j.nome)}</b><span class="vez-nivel">${esc(NIVEIS[nivelDe(j.casa)].nome)}</span></span>`;
+    <span class="vez-info"><small>${estado.ultimaRodada ? 'Última chance de' : 'Vez de'}</small><b>${esc(j.nome)}</b><span class="vez-nivel">${esc(NIVEIS[j.nivelMax].nome)}</span></span>`;
+  caberNaLargura($('.vez-info b'));
   $('#placar').innerHTML = estado.jogadores.map((p, i) => {
     const pct = Math.round((p.casa / FIM) * 100);
     const marca = p.casa >= FIM ? '🏆' : p.casa >= PORTAO ? '⭐' : p.casa === 0 ? '🏁' : p.casa;
     return `<li class="ficha${i === estado.vez ? ' ativa' : ''}" style="--cor:${p.cor}">
       <span class="ficha-peao">${peaoSVG(p)}</span>
-      <span class="ficha-info"><b>${esc(p.nome)}</b><small>${esc(NIVEIS[nivelDe(p.casa)].nome)}</small>
+      <span class="ficha-info"><b>${esc(p.nome)}</b><small>${esc(NIVEIS[p.nivelMax].nome)}</small>${selosHTML(p)}
         <span class="barra" role="progressbar" aria-label="Progresso de ${esc(p.nome)}" aria-valuemin="0" aria-valuemax="${FIM}" aria-valuenow="${p.casa}"><i style="width:${pct}%"></i>${NIVEIS.slice(1, LIDER).map(n => `<em style="left:${(n.desde / FIM) * 100}%"></em>`).join('')}</span></span>
       <span class="ficha-casa" title="Casa">${marca}</span></li>`;
   }).join('');
@@ -566,7 +621,8 @@ function rolar(n) { const r = aoRolar; aoRolar = null; r?.(n); }
 async function andar(i, passos, { seguir = true, pular = true } = {}) {
   const j = estado.jogadores[i];
   let alvo = Math.max(0, Math.min(FIM, j.casa + passos));
-  if (j.casa < PORTAO && alvo > PORTAO) alvo = PORTAO; // ninguém passa direto pelo portão das estrelas
+  const parada = MARCOS[j.marco] ?? PORTAO; // ninguém passa direto por um marco ainda não avaliado nem pelo portão das estrelas
+  if (j.casa < parada && alvo > parada) alvo = parada;
   if (alvo === j.casa) return;
   if (seguir) cameraPara(CASAS[j.casa].x, CASAS[j.casa].y, zoomJogo(), .5);
   while (j.casa !== alvo) {
@@ -577,14 +633,13 @@ async function andar(i, passos, { seguir = true, pular = true } = {}) {
   poeira(CASAS[j.casa].x, CASAS[j.casa].y);
   posicionarPeoes();
   desenharPainel();
-  const n = nivelDe(j.casa);
-  if (n > j.nivelMax && n < LIDER) promocao(i, n); // Líder é festejado na chegada
 }
 
 // Promoção: festa rápida em cima do peão, sem parar o jogo
 function promocao(i, n) {
   const j = estado.jogadores[i], c = CASAS[j.casa];
   j.nivelMax = n;
+  desenharPainel();
   som('promocao');
   aviso(`🎉 Promoção! ${j.nome} agora é ${NIVEIS[n].nome}`, 2400);
   confeteDe(peaoEl[i], { particleCount: 70, spread: 80, startVelocity: 26 });
@@ -607,6 +662,7 @@ async function splash({ pre = '', titulo, sub = '', cor = '#FCE400', icone = '',
   el.style.setProperty('--cor', cor);
   el.classList.toggle('escuro', escuro);
   el.hidden = false;
+  caberNaLargura($('#splash-titulo'));
   anunciar([pre, titulo, sub].filter(Boolean).join('. '));
   const tl = (splashTl = gsap.timeline());
   tl.fromTo(el, { opacity: 0 }, { opacity: 1, duration: .15 })
@@ -618,6 +674,16 @@ async function splash({ pre = '', titulo, sub = '', cor = '#FCE400', icone = '',
   try { await fim(tl); } finally { if (splashTl === tl) splashTl = null; el.hidden = true; }
 }
 const pularSplash = () => splashTl?.progress(1);
+
+// Reduz a fonte até o texto caber na largura, sem cortar palavra no meio (nomes longos no celular).
+// Só se nem com o tamanho mínimo couber, a palavra quebra dentro da caixa em vez de vazar.
+function caberNaLargura(el, minimo = 12) {
+  if (!el) return;
+  el.style.fontSize = el.style.overflowWrap = '';
+  const vaza = () => el.scrollWidth > el.clientWidth + 1;
+  for (let px = parseFloat(getComputedStyle(el).fontSize); vaza() && px > minimo; ) el.style.fontSize = (px = Math.max(minimo, px * .92)) + 'px';
+  if (vaza()) el.style.overflowWrap = 'anywhere';
+}
 
 // ============================== CARTAS ==============================
 
@@ -680,10 +746,12 @@ function esperarContinuar(onde, rotulo = 'Continuar') {
   return aguardar(new Promise(r => (aoContinuar = r))).finally(() => (aoContinuar = null));
 }
 
-async function mostrarPergunta(i, tema, carta, estrela = false) {
-  const j = estado.jogadores[i], t = TEMAS[tema];
+// modo: 'pergunta' (casa colorida, vale casas) · 'avaliacao' (marco de cargo) · 'estrela' (portão da chegada)
+async function mostrarPergunta(i, tema, carta, modo = 'pergunta') {
+  const j = estado.jogadores[i], t = TEMAS[tema], estrela = modo === 'estrela';
   const opcoes = embaralhar([{ texto: carta.certa, certa: true }, ...carta.erradas.map(texto => ({ texto, certa: false }))]);
-  prepararCarta({ cor: estrela ? '#FC3CE4' : t.cor, icone: iconeCasa(estrela ? 'S' : t.letra), tema: t.nome, tipo: estrela ? 'Desafio Estrela' : 'Pergunta' });
+  prepararCarta({ cor: estrela ? '#FC3CE4' : t.cor, icone: iconeCasa(estrela ? 'S' : t.letra), tema: t.nome,
+    tipo: { pergunta: 'Pergunta', avaliacao: 'Avaliação', estrela: 'Desafio Estrela' }[modo] });
   const corpo = $('#carta-corpo');
   corpo.innerHTML = `<p class="carta-quem" style="--cor:${j.cor}">${peaoSVG(j)}<span><b>${esc(j.nome)}</b> responde${estrela ? ' — <b>acertou, chegou!</b>' : ''}</span></p>
     <p class="carta-texto">${esc(carta.pergunta)}</p>
@@ -697,15 +765,21 @@ async function mostrarPergunta(i, tema, carta, estrela = false) {
     iniciarTempo(estado.config.tempo, () => r(-1));
   })).finally(() => (aoEscolher = null));
   pararTempo();
-  const acertou = k >= 0 && opcoes[k].certa;
+  const acertou = k >= 0 && opcoes[k].certa, dominava = domina(j, tema);
   j.perguntas++;
   if (acertou) j.acertos++;
+  j.porTema[tema][acertou ? 'certas' : 'erradas']++;
   const botoes = [...corpo.querySelectorAll('.opcao')];
   botoes.forEach((b, n) => { b.disabled = true; if (opcoes[n].certa) b.classList.add('certa'); else if (n === k) b.classList.add('errada'); else b.classList.add('apagada'); });
   const res = corpo.querySelector('.resposta');
-  const titulo = acertou ? (estrela ? '🌟 Acertou! Você chegou lá!' : `🎉 Acertou! +${BONUS_ACERTO} casas`)
+  const titulo = acertou ? (estrela ? '🌟 Acertou! Você chegou lá!' : modo === 'avaliacao' ? '🎉 Acertou!' : `🎉 Acertou! +${BONUS_ACERTO} casas`)
     : k < 0 ? '⏱ Tempo esgotado!' : estrela ? 'Errou… tente de novo na próxima vez!' : 'Não foi dessa vez!';
-  res.innerHTML = `<p class="resposta-titulo ${acertou ? 'ok' : 'nao'}">${titulo}</p>${carta.explicacao ? `<p class="explicacao"><b>💡 Você sabia?</b> ${esc(carta.explicacao)}</p>` : ''}`;
+  const notas = [];
+  if (!dominava && domina(j, tema)) notas.push(`🏅 Agora você domina ${t.nome}!`);
+  const falta = j.marco - cargoPossivel(j);
+  if (modo === 'avaliacao') notas.push(falta ? `💼 Para virar ${NIVEIS[j.marco].nome}, falta dominar mais ${falta} tema${falta > 1 ? 's' : ''}. Cada acerto conta!`
+    : `💼 Você domina temas suficientes para virar ${NIVEIS[j.marco].nome}!`);
+  res.innerHTML = `<p class="resposta-titulo ${acertou ? 'ok' : 'nao'}">${titulo}</p>${notas.map(n => `<p class="criterio">${esc(n)}</p>`).join('')}${carta.explicacao ? `<p class="explicacao"><b>💡 Você sabia?</b> ${esc(carta.explicacao)}</p>` : ''}`;
   if (acertou) {
     som('certo');
     const certo = botoes.find(b => b.classList.contains('certa'));
@@ -791,7 +865,18 @@ async function cartaTema(i, tema) {
   som('pergunta');
   await splash({ pre: t.nome, titulo: c.desafio ? 'Desafio prático!' : 'Pergunta!', cor: t.cor, icone: iconeCasa(t.letra), tempo: 450 });
   const casas = c.desafio ? await mostrarDesafio(i, compra.tema, c) : (await mostrarPergunta(i, compra.tema, c)) ? BONUS_ACERTO : 0;
+  verificarPromocao(i);
   if (casas) await andar(i, casas, { seguir: false, pular: false });
+}
+
+// Avaliação de desempenho: em cada marco de cargo o peão para e responde uma pergunta de um tema que ainda
+// não domina. Com temas suficientes, é promovido; senão segue jogando normalmente e o próximo acerto conta.
+async function avaliacao(i) {
+  const j = estado.jogadores[i], n = ++j.marco, compra = comprar(temaParaAvaliar(j), true);
+  som('pergunta');
+  await splash({ pre: `Rumo a ${NIVEIS[n].curto}`, titulo: 'Avaliação!', sub: `Pergunta de ${TEMAS[compra.tema].nome}`, cor: NIVEIS[n].cor, icone: chaveiroSVG(n), tempo: 700 });
+  await mostrarPergunta(i, compra.tema, compra.carta, 'avaliacao');
+  verificarPromocao(i);
 }
 
 async function cartaEvento(i, tipo) {
@@ -818,8 +903,8 @@ async function desafioEstrela(i) {
   som('estrela');
   confete({ particleCount: 50, shapes: ['star'], colors: ['#FC3CE4', '#00C0F0', '#FCE400'], origin: { y: .4 } });
   await splash({ pre: 'Portão da chegada', titulo: 'Desafio Estrela!', sub: 'Acertou a pergunta, chegou!', cor: '#FC3CE4', icone: iconeCasa('S'), tempo: 700 });
-  const compra = comprar(sortear(Object.keys(TEMAS)), true);
-  if (await mostrarPergunta(i, compra.tema, compra.carta, true)) {
+  const compra = comprar(temaParaAvaliar(j), true);
+  if (await mostrarPergunta(i, compra.tema, compra.carta, 'estrela')) {
     cameraPara(CASAS[j.casa].x, CASAS[j.casa].y, zoomJogo(), .5);
     await andar(i, FIM - j.casa, { seguir: false });
     await espera(400);
@@ -827,6 +912,7 @@ async function desafioEstrela(i) {
 }
 
 async function efeitoCasa(i) {
+  if (marcoPendente(estado.jogadores[i])) return avaliacao(i);
   const letra = MAPA[estado.jogadores[i].casa];
   if (TEMA_DA_LETRA[letra]) return cartaTema(i, TEMA_DA_LETRA[letra]);
   if (letra === 'Q') return cartaEvento(i, 'qualificacao');
@@ -844,7 +930,7 @@ async function turno(i) {
   posicionarPeoes();
   som('vez');
   await splash({ pre: estado.ultimaRodada ? 'Última chance de' : 'Vez de', titulo: j.nome,
-    sub: j.casa >= PORTAO ? 'Desafio Estrela: acerte e chegue!' : NIVEIS[nivelDe(j.casa)].nome,
+    sub: j.casa >= PORTAO ? 'Desafio Estrela: acerte e chegue!' : NIVEIS[j.nivelMax].nome,
     cor: j.cor, icone: peaoSVG(j), tempo: estado.jogadores.length > 1 ? 600 : 250 });
   if (j.casa >= PORTAO) return desafioEstrela(i);
   const n = await rolarDado(j);
@@ -853,6 +939,7 @@ async function turno(i) {
     await espera(200);
     cameraPara(500, 500, 1, .7);
     await efeitoCasa(i);
+    if (marcoPendente(j)) await avaliacao(i); // um bônus pode ter levado o peão até um marco
   }
 }
 
@@ -892,16 +979,20 @@ async function rodarPartida() {
 
 async function chegada(i) {
   const j = estado.jogadores[i];
-  j.nivelMax = LIDER;
+  j.marco = LIDER; // o Desafio Estrela foi a última avaliação
+  j.nivelMax = Math.max(j.nivelMax, cargoPossivel(j));
+  const faltam = naoDominados(j).map(t => TEMAS[t].nome);
   desenharPainel();
   som('vitoria');
   confete({ particleCount: 150, spread: 110, origin: { y: .45 } });
   const continua = i < estado.jogadores.length - 1 && !estado.ultimaRodada;
-  await splash({ pre: 'Chegou!', titulo: j.nome, sub: continua ? 'Virou Líder! Os outros têm uma última chance' : 'Virou Líder!', cor: '#FFD21A', icone: chaveiroSVG(LIDER), tempo: 1500 });
+  const sub = faltam.length ? `Chegou como ${NIVEIS[j.nivelMax].nome}! Para Líder, faltou dominar ${listaNomes(faltam)}`
+    : continua ? 'Virou Líder! Os outros têm uma última chance' : 'Virou Líder!';
+  await splash({ pre: 'Chegou!', titulo: j.nome, sub, cor: '#FFD21A', icone: chaveiroSVG(j.nivelMax), tempo: faltam.length ? 2200 : 1500 });
 }
 
 const chegou = j => j.casa >= FIM;
-const cargoFinal = j => (chegou(j) ? LIDER : nivelDe(j.casa));
+const cargoFinal = j => j.nivelMax;
 
 function terminar(motivo) {
   partidaId++;
@@ -913,22 +1004,25 @@ function terminar(motivo) {
   aoRolar = aoEscolher = aoContinuar = null;
   document.querySelectorAll('dialog[open]').forEach(d => d.close());
   $('#splash').hidden = true;
-  const vencedores = estado.jogadores.filter(chegou);
-  // vencedores primeiro (desempate: mais acertos); depois quem foi mais longe
-  ranking = [...estado.jogadores].sort((a, b) => chegou(b) - chegou(a) || (chegou(a) ? b.acertos - a.acertos : b.casa - a.casa || b.acertos - a.acertos));
+  const vencedores = estado.jogadores.filter(chegou), lideres = vencedores.filter(j => cargoFinal(j) === LIDER);
+  // maior cargo primeiro; desempate: quem foi mais longe, depois mais acertos
+  ranking = [...estado.jogadores].sort((a, b) => cargoFinal(b) - cargoFinal(a) || b.casa - a.casa || b.acertos - a.acertos);
   const titulo = vencedores.length ? 'Chegou!' : { tempo: 'Tempo esgotado!', encerrada: 'Fim de jogo!' }[motivo] || 'Fim de jogo!';
   $('#fim-titulo').innerHTML = [...titulo].map(l => `<span>${l === ' ' ? '&nbsp;' : esc(l)}</span>`).join('');
-  $('#fim-sub').textContent = vencedores.length === 1 ? `${vencedores[0].nome} chegou e virou Líder!`
-    : vencedores.length ? `${listaNomes(vencedores.map(v => v.nome))} chegaram e viraram Líderes!` : 'Veja até onde cada um chegou na carreira:';
+  $('#fim-sub').textContent = lideres.length === 1 ? `${lideres[0].nome} chegou e virou Líder!`
+    : lideres.length ? `${listaNomes(lideres.map(v => v.nome))} chegaram e viraram Líderes!`
+    : vencedores.length ? `${listaNomes(vencedores.map(v => v.nome))} ${vencedores.length > 1 ? 'chegaram' : 'chegou'} ao fim! Veja o cargo de cada um:`
+    : 'Veja até onde cada um chegou na carreira:';
   gsap.killTweensOf('#podio *');
   $('#podio').innerHTML = ranking.map((j, k) => {
     const nivel = cargoFinal(j);
-    return `<li class="podio-item${chegou(j) ? ' campeao' : ''}" style="--cor:${j.cor}">
+    return `<li class="podio-item${nivel === LIDER ? ' campeao' : ''}" style="--cor:${j.cor}">
       <span class="podio-pos">${k + 1}º</span>
-      <span class="podio-peao">${peaoSVG(j, chegou(j) ? '<use href="#coroa"/>' : '')}</span>
+      <span class="podio-peao">${peaoSVG(j, nivel === LIDER ? '<use href="#coroa"/>' : '')}</span>
       <b class="podio-nome">${esc(j.nome)}</b>
       <span class="podio-nivel">${esc(NIVEIS[nivel].nome)}</span>
       <span class="podio-chaveiro">${chaveiroSVG(nivel)}</span>
+      ${selosHTML(j)}
       <small>${j.perguntas ? `Acertou ${j.acertos} de ${j.perguntas} pergunta${j.perguntas > 1 ? 's' : ''}` : 'Nenhuma pergunta desta vez'}</small></li>`;
   }).join('');
   mostrarTela('fim');
@@ -1003,7 +1097,7 @@ const crachaHTML = (f, novo = false) => {
     ? `<img src="${esc(f.foto)}" alt="Foto de ${esc(f.nome)}">` : `<span class="selfie-avatar">${peaoSVG(f)}</span>`;
   return `<li class="cracha${novo ? ' novo' : ''}" style="--nivel:${nv.cor}; --cor:${esc(f.cor)}">
     <span class="cracha-presilha" aria-hidden="true"></span>
-    <div class="cracha-topo"><img src="img/logo.png" alt=""><span>Carreira em Jogo</span></div>
+    <div class="cracha-topo"><img src="img/logo-circulo.png" alt=""><span>Carreira em Jogo</span></div>
     <div class="cracha-foto">${foto}</div>
     <b class="cracha-nome">${esc(f.nome)}</b>
     <span class="cracha-cargo">${esc(nv.nome)}</span>
@@ -1148,6 +1242,7 @@ async function iniciarSelfies() {
   const pendentes = ranking.filter(j => !j.registrado);
   if (!pendentes.length) return mostrarQuadro();
   const dlg = $('#dlg-selfie'), novos = [];
+  animarSo(null); // o pódio fica parado atrás da câmera, para o vídeo não engasgar
   if (!dlg.open) dlg.showModal();
   for (const j of pendentes) {
     const r = await selfie({ ...j, nivel: cargoFinal(j) });
@@ -1189,14 +1284,19 @@ function desenharLobby() {
   document.querySelectorAll('.vaga:not(.vazia) .vaga-peao svg').forEach((s, k) => loop(s, { y: -6, duration: .7 + k * .1 }));
 }
 
-const LIMITES = { 'cfg-tempo': [0, 600], 'cfg-desafio': [0, 600], 'cfg-duracao': [0, 240] };
+const LIMITES = { 'cfg-tempo': [0, 600], 'cfg-desafio': [0, 600], 'cfg-duracao': [0, 240], 'cfg-dificuldade': [0, DIFICULDADES.length - 1] };
 function lerNumero(id, padrao) {
   const v = Math.round(Number($('#' + id).value));
   return Number.isFinite(v) && $('#' + id).value !== '' ? Math.min(LIMITES[id][1], Math.max(LIMITES[id][0], v)) : padrao;
 }
 
 function marcarAtalhos() {
-  document.querySelectorAll('.atalhos').forEach(g => g.querySelectorAll('button').forEach(b => b.classList.toggle('ativo', b.dataset.valor === String(Number($('#' + g.dataset.alvo).value)))));
+  document.querySelectorAll('.atalhos').forEach(g => g.querySelectorAll('button').forEach(b => {
+    const ativo = b.dataset.valor === String(Number($('#' + g.dataset.alvo).value));
+    b.classList.toggle('ativo', ativo);
+    b.setAttribute('aria-pressed', ativo);
+  }));
+  $('#dificuldade-dica').textContent = DIFICULDADES[lerNumero('cfg-dificuldade', CONFIG_PADRAO.dificuldade)].dica;
 }
 
 function iniciarLobby() {
@@ -1206,13 +1306,15 @@ function iniciarLobby() {
   $('#cfg-desafio').value = cfg.desafio;
   $('#cfg-duracao').value = cfg.duracao;
   $('#cfg-mediador').checked = !!cfg.mediador;
+  $('#cfg-dificuldade').value = cfg.dificuldade;
   marcarAtalhos();
   mostrarTela('lobby');
   gsap.from('.vaga', { y: 60, opacity: 0, duration: .5, stagger: .08, ease: 'back.out(1.7)' });
 }
 
 function comecar() {
-  const config = { tempo: lerNumero('cfg-tempo', 45), desafio: lerNumero('cfg-desafio', 45), duracao: lerNumero('cfg-duracao', 0), mediador: $('#cfg-mediador').checked };
+  const config = { tempo: lerNumero('cfg-tempo', 45), desafio: lerNumero('cfg-desafio', 45), duracao: lerNumero('cfg-duracao', 0), mediador: $('#cfg-mediador').checked,
+    dificuldade: lerNumero('cfg-dificuldade', CONFIG_PADRAO.dificuldade) };
   gravarPref('config', config);
   gravarPref('lobby', lobby);
   const jogadores = CORES.map((c, i) => ({ ...c, chapeu: lobby[i].chapeu, nome: lobby[i].nome.trim() || c.nome, ativo: lobby[i].ativo }))
@@ -1381,7 +1483,8 @@ function ligarEventos() {
     ['X', 'Cilada', 'Atitude errada: volte 2 ou 3 casas.'],
     ['S', 'Desafio Estrela', 'O peão para na 1ª estrela. Acertou, chegou! Errou, tenta de novo na próxima vez.'],
   ].map(([l, nome, txt]) => `<li>${iconeCasa(l)}<span><b>${esc(nome)}</b>${esc(txt)}</span></li>`).join('') +
-    `<li class="legenda-dica"><span><b>Casa colorida:</b> pergunta (acertou, +${BONUS_ACERTO} casas; errou, fica e aprende) ou desafio prático, avaliado pelo mediador ou pela votação dos outros jogadores. Só vale a casa onde o dado te levou.</span></li>`;
+    `<li class="legenda-dica"><span><b>Casa colorida:</b> pergunta (acertou, +${BONUS_ACERTO} casas; errou, fica e aprende) ou desafio prático, avaliado pelo mediador ou pela votação dos outros jogadores. Só vale a casa onde o dado te levou.</span></li>` +
+    `<li class="legenda-dica"><span><b>Marco de cargo (Júnior, Pleno, Sênior):</b> o peão para e faz a avaliação, uma pergunta de um tema que ainda não domina. Cada cargo pede um tema dominado a mais; Líder domina os 4.</span></li>`;
 }
 
 // ============================== INÍCIO ==============================
@@ -1390,4 +1493,5 @@ carregarConteudo();
 montarDado();
 atualizarBotaoSom();
 ligarEventos();
+addEventListener('resize', () => caberNaLargura($('.vez-info b'))); // girar o celular reajusta o nome
 telaInicial();
