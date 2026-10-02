@@ -70,7 +70,8 @@ for (const c of CENARIOS) {
   const inicio = Date.now();
   let tela = 'jogo';
   while (Date.now() - inicio < 240000 && tela !== 'quadro') { tela = await js(PASSO); await espera(120); }
-  const r = await js(`(async () => ({ tela: telaAtual, quadro: (await quadro.todos()).length,
+  const r = await js(`(async () => ({ tela: telaAtual, quadro: (await quadro.todos()).length, sonsLeves: Object.values(SONS).every(s => s instanceof AudioBuffer),
+    presas: gsap.globalTimeline.getChildren(true, true, false).filter(t => t.targets().some(el => el instanceof Element && !el.isConnected)).length,
     soDoNivel: Object.keys(TEMAS).every(t => Array.from({ length: 30 }, () => comprar(t, false)).every(c => BARALHOS[c.tema][estado.config.dificuldade].includes(c.carta))),
     jogadores: estado.jogadores.map(j => ({ casa: j.casa, nivel: cargoFinal(j), marco: j.marco, perguntas: j.perguntas,
       obrigatorias: NIVEIS.slice(1).filter(n => j.casa >= n.desde).length })) }))()`);
@@ -81,6 +82,8 @@ for (const c of CENARIOS) {
   if (r.jogadores.some(j => j.casa < 0 || j.casa > 34 || (j.nivel === 4 && j.casa !== 34) || j.nivel > j.marco)) problemas.push('cargo final inconsistente com a casa ou com as avaliações feitas');
   if (r.jogadores.some(j => j.perguntas < j.obrigatorias)) problemas.push('alguém passou por um marco de cargo sem responder a avaliação');
   if (!r.soDoNivel) problemas.push('saiu carta de outra dificuldade');
+  if (!r.sonsLeves) problemas.push('sons não foram decodificados pelo Web Audio (voltou a criar um <audio> por som)');
+  if (r.presas) problemas.push(`${r.presas} animação(ões) presas a elementos já removidos (vazamento de memória)`);
   if (!c.config.duracao && !r.jogadores.some(j => j.casa === 34)) problemas.push('partida sem tempo terminou sem ninguém chegar');
   if (erros.length) problemas.push('erros no console: ' + erros.join(' | '));
   console.log(`${problemas.length ? '✗' : '✓'} ${c.nome} — ${((Date.now() - inicio) / 1000).toFixed(0)} s, casas finais ${r.jogadores.map(j => j.casa).join('/')}`);
